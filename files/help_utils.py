@@ -1,12 +1,14 @@
 from os.path import splitext,getsize
 errors = {
     404: "errors/404_error.html",
-    405: "errors/405_error.html"
+    405: "errors/405_error.html",
+    500: "errors/500_error.html"
 }
 status = {
     200: "200 OK",
     404: "404 Not Found",
-    405: "405 Method Not Allowed"
+    405: "405 Method Not Allowed",
+    505: "500 Internal Server Error"
 }
 types = {
     ".js": "application/javascript",
@@ -20,32 +22,43 @@ types = {
     ".swf": "application/swf",
 
 }
-
-def sendfile(conn, file="/160313.jpg", status=200):
-    address = "httptest" + file
-
-    try:
-        filetype = splitext(address)[1]
-        f = open(address, "rb")
-        status=200
-    except FileNotFoundError as e:
-        print(e)
-        address = errors[404]
-        filetype = splitext(address)[1]
-        f = open(address, "rb")
-        status = 404
+def senderror(conn, code):
+    address = errors[code]
+    filetype = splitext(address)[1]
+    f = open(address, "rb")
+    status = code
     all_data = getsize(address)
     print(all_data)
     typ = types[filetype]
     send_answer(conn, status,all_data,typ)
-
     while True:
             data = f.read()
             if not data: break
             conn.sendall(data)
 
     f.close()
-    return bytes(all_data), filetype.encode("utf-8")
+
+
+def sendfile(conn, file):
+    address = file
+    filetype = splitext(address)[1]
+    try:
+        f = open(address, "rb")
+        status=200
+        all_data = getsize(address)
+        print(all_data)
+        typ = types[filetype]
+        send_answer(conn, status,all_data,typ)
+
+        while True:
+                data = f.read()
+                if not data: break
+                conn.sendall(data)
+
+        f.close()
+    except FileNotFoundError:
+        senderror(conn,404)
+
 
 def parse_addr(conn, addr):
     if addr[-1] == "/":
@@ -77,7 +90,7 @@ def parse(conn, addr):
         print(address)
         parse_addr(conn,address)
     else:
-        sendfile(conn, file=errors[405])
+        senderror(conn, 405)
     return 0
 
 def send_answer(conn, i, length, typ):
