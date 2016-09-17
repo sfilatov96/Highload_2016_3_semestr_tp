@@ -6,7 +6,7 @@ import argparse
 
 BUFF = 1024
 HOST = '127.0.0.1'
-PORT = 8080
+PORT = 80
 THREADS = 4
 thread_list = []
 def handler(serversock,number):
