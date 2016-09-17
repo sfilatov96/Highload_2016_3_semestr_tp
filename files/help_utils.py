@@ -1,97 +1,114 @@
-from os.path import splitext,getsize
+from os.path import splitext, getsize
+import urllib.request
 errors = {
+    403: "errors/403_error.html",
     404: "errors/404_error.html",
     405: "errors/405_error.html",
-    500: "errors/500_error.html"
+    500: "errors/500_error.html",
 }
 status = {
     200: "200 OK",
+    403: "403 Forbidden",
     404: "404 Not Found",
     405: "405 Method Not Allowed",
-    505: "500 Internal Server Error"
+    500: "500 Internal Server Error"
 }
 types = {
     ".js": "application/javascript",
     ".jpeg": "image/jpeg",
-    ".jpg": "image/jpg",
+    ".jpg": "image/jpeg",
     ".html": "text/html",
     ".png": "image/png",
     ".gif": "image/gif",
     ".css": "text/css",
     ".txt": "text/plain",
-    ".swf": "application/swf",
-
+    ".swf": "application/x-shockwave-flash",
 }
+
+
 def senderror(conn, code):
     address = errors[code]
     filetype = splitext(address)[1]
     f = open(address, "rb")
     status = code
     all_data = getsize(address)
-    print(all_data)
     typ = types[filetype]
-    send_answer(conn, status,all_data,typ)
+    send_answer(conn, status, all_data, typ)
     while True:
-            data = f.read()
-            if not data: break
-            conn.sendall(data)
+        data = f.read()
+        if not data: break
+        conn.sendall(data)
 
     f.close()
+    conn.close()
 
 
-def sendfile(conn, file):
-    address = file
+def sendfile(conn, file, method):
+    address = urllib.request.unquote(file)
+    address = address.split("?")[0]
+    address = '.' + address
     filetype = splitext(address)[1]
-    try:
-        f = open(address, "rb")
-        status=200
-        all_data = getsize(address)
-        print(all_data)
-        typ = types[filetype]
-        send_answer(conn, status,all_data,typ)
-
-        while True:
-                data = f.read()
-                if not data: break
-                conn.sendall(data)
-
-        f.close()
-    except FileNotFoundError:
+    if '..' in address:
         senderror(conn,404)
-
-
-def parse_addr(conn, addr):
-    if addr[-1] == "/":
-        addr = addr + "index.html"
-        sendfile(conn,addr)
     else:
-        sendfile(conn,addr)
+        try:
+            f = open(address, "rb")
+            status = 200
+            all_data = getsize(address)
+            typ = types[filetype]
+            send_answer(conn, status, all_data, typ)
+            if method != "HEAD":
+                while True:
+                    data = f.read()
+                    if not data:
+                        break
+                    conn.sendall(data)
+
+                f.close()
+            conn.close()
+        except FileNotFoundError:
+            if "index.html" in address:
+                senderror(conn, 403)
+            else:
+                senderror(conn, 404)
+        except IsADirectoryError:
+            if file[-1] == '/':
+                file += "index.html"
+            else:
+                file += "/index.html"
+            sendfile(conn, file, method)
 
 
 def parse(conn, addr):
-
     data = b""
 
-    while not b"\r\n" in data: # ждём первую строку
+    while not b"\r\n" in data:  # ждём первую строку
         tmp = conn.recv(1024)
-        if not tmp:   # сокет закрыли, пустой объект
+        if not tmp:  # сокет закрыли, пустой объект
             break
         else:
             data += tmp
 
-    if not data:      # данные не пришли
-        return        # не обрабатываем
+    if not data:  # данные не пришли
+        return  # не обрабатываем
+
+
 
     udata = data.decode("utf-8")
     udata = udata.split("\r\n", 1)[0]
-    method, address, protocol = udata.split(" ", 2)
-    print(method, address, protocol)
-    if method in ("GET","HEAD"):
-        print(address)
-        parse_addr(conn,address)
+    print(udata.split(" ", 2))
+    if len(udata.split(" ", 2)) < 3:
+        senderror(conn, 404)
     else:
-        senderror(conn, 405)
-    return 0
+        method, address, protocol = udata.split(" ", 2)
+        if method in ("GET", "HEAD"):
+            sendfile(conn, address, method)
+        else:
+            senderror(conn, 405)
+
+
+
+
 
 def send_answer(conn, i, length, typ):
     conn.send(b"HTTP/1.1 " + status[i].encode("utf-8") + b"\r\n")

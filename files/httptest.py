@@ -6,8 +6,8 @@ import httplib
 import unittest
 
 class HttpServer(unittest.TestCase):
-  host = "localhost"
-  port = 80
+  host = "127.0.0.1"
+  port = 8080
 
   def setUp(self):
     self.conn = httplib.HTTPConnection(self.host, self.port, timeout=10)
@@ -133,7 +133,7 @@ class HttpServer(unittest.TestCase):
 
   def test_head_method(self):
     """head method support"""
-
+    i = 0
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((self.host, self.port))
     s.send("HEAD /httptest/dir2/page.html HTTP/1.0\r\n\r\n")
