@@ -1,5 +1,6 @@
 from os.path import splitext, getsize
 import urllib.request
+from time import gmtime, strftime
 errors = {
     403: "errors/403_error.html",
     404: "errors/404_error.html",
@@ -43,13 +44,13 @@ def senderror(conn, code):
     conn.close()
 
 
-def sendfile(conn, file, method):
+def sendfile(conn, file, method, ROOT_DIR):
     address = urllib.request.unquote(file)
     address = address.split("?")[0]
-    address = '.' + address
+    address = (ROOT_DIR or '.') + address
     filetype = splitext(address)[1]
     if '..' in address:
-        senderror(conn,404)
+        senderror(conn, 404)
     else:
         try:
             f = open(address, "rb")
@@ -76,12 +77,12 @@ def sendfile(conn, file, method):
                 file += "index.html"
             else:
                 file += "/index.html"
-            sendfile(conn, file, method)
+            sendfile(conn, file, method, ROOT_DIR)
 
 
-def parse(conn, addr):
+def parse(conn, addr, pid, ROOT_DIR):
     data = b""
-
+    print("send on PID: ", pid)
     while not b"\r\n" in data:  # ждём первую строку
         tmp = conn.recv(1024)
         if not tmp:  # сокет закрыли, пустой объект
@@ -92,8 +93,6 @@ def parse(conn, addr):
     if not data:  # данные не пришли
         return  # не обрабатываем
 
-
-
     udata = data.decode("utf-8")
     udata = udata.split("\r\n", 1)[0]
     print(udata.split(" ", 2))
@@ -102,16 +101,14 @@ def parse(conn, addr):
     else:
         method, address, protocol = udata.split(" ", 2)
         if method in ("GET", "HEAD"):
-            sendfile(conn, address, method)
+            sendfile(conn, address, method, ROOT_DIR)
         else:
             senderror(conn, 405)
 
 
-
-
-
 def send_answer(conn, i, length, typ):
     conn.send(b"HTTP/1.1 " + status[i].encode("utf-8") + b"\r\n")
+    conn.send(b"Date: " + '{date}'.format(date=strftime("%a, %d %b %Y %X GMT", gmtime())).encode("utf-8") + b"\r\n")
     conn.send(b"Server: sfilatov96\r\n")
     conn.send(b"Connection: keep-alive\r\n")
     conn.send(b"Content-Type: " + typ.encode("utf-8") + b"\r\n")
